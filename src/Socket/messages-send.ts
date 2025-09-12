@@ -329,6 +329,32 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		const isGroup = server === 'g.us'
 		const isStatus = jid === statusJid
 		const isLid = server === 'lid'
+		let remoteLid : string;
+		if(!participant && isJidUser(jid) )
+				{
+					
+					if(!isLidUser(jid))
+						{
+
+						const verify = lidCache.get(jid);
+						if(verify){ 
+							jid = verify
+						}
+						else
+						{	const usyncQuery = new USyncQuery().withContactProtocol().withLIDProtocol()
+							 usyncQuery.withUser(new USyncUser().withPhone(jid.split('@')[0]))
+							const results = await sock.executeUSyncQuery(usyncQuery)
+						if (results?.list) {
+							const maybeLid = results.list[0]?.lid;
+								if (typeof maybeLid === 'string') {
+								lidCache.set(jid,maybeLid)
+								remoteLid = maybeLid;
+								
+								}					
+						   }
+						}
+					}
+			}		
 
 		msgId = msgId || generateMessageIDV2(sock.user?.id)
 		useUserDevicesCache = useUserDevicesCache !== false
@@ -463,7 +489,12 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 
 						if(additionalAttributes?.['category'] !== 'peer') {
 							const additionalDevices = await getUSyncDevices([ meId, jid ], !!useUserDevicesCache, true)
-							devices.push(...additionalDevices)
+							devices.push(...additionalDevices);
+								if(remoteLid)
+									{
+										const AdittionalLid = await getUSyncDevices([remoteLid], !!useUserDevicesCache, true);
+										devices.push(...AdittionalLid);
+									} 		
 						}
 					}
 
