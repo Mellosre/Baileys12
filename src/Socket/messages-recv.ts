@@ -990,28 +990,22 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 		return sendPeerDataOperationMessage(pdoMessage)
 	}
 
-	const handleCall = async(node: BinaryNode) => {
-		let status: WACallUpdateType
+	const handleCall = async (node: BinaryNode) => {
+		let status
 		const { attrs } = node
 		const [infoChild] = getAllBinaryNodeChildren(node)
 		const callId = infoChild.attrs['call-id']
 		const from = infoChild.attrs.from || infoChild.attrs['call-creator']
 		status = getCallStatusFromNode(infoChild)
-
-		if (isLidUser(from) && infoChild.tag === 'relaylatency') {
-			const verify = callOfferCache.get(callId)
-			if (!verify) {
-				status = 'offer'
-				const callLid: WACallEvent = {
-					chatId: attrs.from!,
-					from,
-					id: callId,
-					date: new Date(+attrs.t! * 1000),
-					offline: !!attrs.offline,
-					status
-				}
-				callOfferCache.set(callId, callLid)
+		if(isLidUser(from) && infoChild.tag==='relaylatency')
+		{
+			const verify = callOfferCache.get(callId);
+			if(!verify)
+			{
+				status = 'offer';
+				callOfferCache.set(callId,true);
 			}
+
 		}
 		const call: WACallEvent = {
 			chatId: attrs.from,
@@ -1019,10 +1013,10 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 			id: callId,
 			date: new Date(+attrs.t * 1000),
 			offline: !!attrs.offline,
-			status,
+			status
 		}
 
-		if(status === 'offer') {
+		if (status === 'offer') {
 			call.isVideo = !!getBinaryNodeChild(infoChild, 'video')
 			call.isGroup = infoChild.attrs.type === 'group' || !!infoChild.attrs['group-jid']
 			call.groupJid = infoChild.attrs['group-jid']
@@ -1032,15 +1026,18 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 		const existingCall = callOfferCache.get<WACallEvent>(call.id)
 
 		// use existing call info to populate this event
-		if(existingCall) {
+		if (existingCall) {
 			call.isVideo = existingCall.isVideo
 			call.isGroup = existingCall.isGroup
 		}
 
 		// delete data once call has ended
-		if(status === 'reject' || status === 'accept' || status === 'timeout' || status === 'terminate') {
+		if (status === 'reject' || status === 'accept' || status === 'timeout' || status === 'terminate') {
 			callOfferCache.del(call.id)
 			if(isLidUser(from))
+			{
+			 callOfferCache.del(from)	
+			}
 		}
 
 		ev.emit('call', [call])
