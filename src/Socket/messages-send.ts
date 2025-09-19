@@ -274,43 +274,67 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		return msgId
 	}
 
-	const createParticipantNodes = async(
-		jids: string[],
-		message: proto.IMessage,
-		extraAttrs?: BinaryNode['attrs']
-	) => {
-		const patched = await patchMessageBeforeSending(message, jids)
-		const bytes = encodeWAMessage(patched)
+		const createParticipantNodes = async (jids: string[], message: proto.IMessage, extraAttrs?: BinaryNode['attrs'], lid?, meid?, melid?) => {
+		let patched = await patchMessageBeforeSending(message, jids)
+		if (!Array.isArray(patched)) {
+			patched = jids ? jids.map(jid => ({ recipientJid: jid, ...patched })) : [patched]
+		}
 
 		let shouldIncludeDeviceIdentity = false
-		const nodes = await Promise.all(
-			jids.map(
-				async jid => {
-					const { type, ciphertext } = await signalRepository
-						.encryptMessage({ jid: convertlidDevice(jid,lid,meid,melid), data: bytes })
-					if(type === 'pkmsg') {
-						shouldIncludeDeviceIdentity = true
-					}
 
-					const node: BinaryNode = {
-						tag: 'to',
-						attrs: { jid },
-						content: [{
+		const nodes = await Promise.all(
+			patched.map(async patchedMessageWithJid => {
+				const { recipientJid: jid, ...patchedMessage } = patchedMessageWithJid
+				if (!jid) {
+					return {} as BinaryNode
+				}
+
+				const bytes = encodeWAMessage(patchedMessage)
+				const { type, ciphertext } = await signalRepository.encryptMessage({ jid: convertlidDevice(jid,lid,meid,melid), data: bytes })
+				if (type === 'pkmsg') {
+					shouldIncludeDeviceIdentity = true
+				}
+
+				const node: BinaryNode = {
+					tag: 'to',
+					attrs: { jid },
+					content: [
+						{
 							tag: 'enc',
 							attrs: {
 								v: '2',
 								type,
-								...extraAttrs || {}
+								...(extraAttrs || {})
 							},
 							content: ciphertext
-						}]
-					}
-					return node
+						}
+					]
 				}
-			)
+				return node
+			})
 		)
 		return { nodes, shouldIncludeDeviceIdentity }
 	}
+
+	const getLid = async (jid: string): Promise<string | null> => {
+	const cachedLid = lidCache.get(jid);
+	if (cachedLid) {
+		return cachedLid;
+	}	
+	const usyncQuery = new USyncQuery()
+		.withContactProtocol()
+		.withLIDProtocol()
+		.withUser(new USyncUser().withPhone(jid.split('@')[0]));	
+	const results = await sock.executeUSyncQuery(usyncQuery);	
+	if (results?.list) {
+		const maybeLid = results.list[0]?.lid;	
+		if (typeof maybeLid === 'string') {
+		lidCache.set(jid, maybeLid);
+		return maybeLid;
+		}
+	}
+	return null;
+	};
 
 	const relayMessage = async(
 		jid: string,
