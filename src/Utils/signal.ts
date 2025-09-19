@@ -68,10 +68,7 @@ export const xmppPreKey = (pair: KeyPair, id: number): BinaryNode => (
 	}
 )
 
-export const parseAndInjectE2ESessions = async(
-	node: BinaryNode,
-	repository: SignalRepository
-) => {
+ export const parseAndInjectE2ESessions = async (node: BinaryNode, repository: SignalRepository, lid?: string | null | undefined, meid?: string, melid?:string) => {
 	const extractKey = (key: BinaryNode) => (
 		key ? ({
 			keyId: getBinaryNodeChildUInt(key, 'id', 3)!,
@@ -118,6 +115,7 @@ export const parseAndInjectE2ESessions = async(
 
 export const extractDeviceJids = (result: USyncQueryResultList[], myJid: string, excludeZeroDevices: boolean) => {
 	const { user: myUser, device: myDevice } = jidDecode(myJid)!
+	const { user: mylidUser, device: melidDevice } = jidDecode(mylid)!
 
 	const extracted: JidWithDevice[] = []
 
