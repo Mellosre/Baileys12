@@ -40,6 +40,11 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		useClones: false
 	})
 
+	const lidCache = new NodeCache({
+  stdTTL: 3600,       // 1 hour
+  useClones: false
+});
+
 	let mediaConn: Promise<MediaConnInfo>
 	const refreshMediaConn = async(forceGet = false) => {
 		const media = await mediaConn
