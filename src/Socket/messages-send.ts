@@ -6,7 +6,7 @@ import { DEFAULT_CACHE_TTLS, WA_DEFAULT_EPHEMERAL } from '../Defaults'
 import { AnyMessageContent, MediaConnInfo, MessageReceiptType, MessageRelayOptions, MiscMessageGenerationOptions, SocketConfig, WAMessageKey } from '../Types'
 import { aggregateMessageKeysNotFromMe, assertMediaContent, bindWaitForEvent, decryptMediaRetryData, encodeSignedDeviceIdentity, encodeWAMessage, encryptMediaRetryRequest, extractDeviceJids, generateMessageIDV2, generateWAMessage, getStatusCodeForMediaRetry, getUrlFromDirectPath, getWAUploadToServer, normalizeMessageContent, parseAndInjectE2ESessions, unixTimestampSeconds, convertlidDevice, getContentType } from '../Utils'
 import { getUrlInfo } from '../Utils/link-preview'
-import { areJidsSameUser, BinaryNode, BinaryNodeAttributes, getBinaryNodeChild, getBinaryNodeChildren, isJidGroup, isJidUser, jidDecode, jidEncode, jidNormalizedUser, JidWithDevice, S_WHATSAPP_NET } from '../WABinary'
+import { areJidsSameUser, BinaryNode, BinaryNodeAttributes, getBinaryNodeChild, getBinaryNodeChildren, isJidGroup, isJidUser, isLidUser, jidDecode, jidEncode, jidNormalizedUser, JidWithDevice, S_WHATSAPP_NET } from '../WABinary'
 import { USyncQuery, USyncUser } from '../WAUSync'
 import { makeGroupsSocket } from './groups'
 import ListType = proto.Message.ListMessage.ListType;
@@ -199,56 +199,52 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		return deviceResults
 	}
 
-	const assertSessions = async(jids: string[], force: boolean) => {
-    let didFetchNewSession = false;
-    let jidsRequiringFetch: string[] = [];
+	const assertSessions = async (jids: string[], force: boolean, lids?: string) => {
+		let didFetchNewSession = false
+		const melid = jidNormalizedUser(authState.creds.me?.lid)
+		const meid = jidNormalizedUser(authState.creds.me?.id)
+		let jidsRequiringFetch: string[] = []
+		if (force) {
+			jidsRequiringFetch = jids
+		} else {
 
-    if (force) {
-        jidsRequiringFetch = jids;
-    } else {
-        // Correção: Removido o parêntese extra e a quebra de linha desnecessária
-        const addrs = jids.map(jid =>
-            signalRepository.jidToSignalProtocolAddress(convertlidDevice(jid, lids, meid, melid))
-        );
+			const addrs = jids.map(jid => signalRepository.jidToSignalProtocolAddress(convertlidDevice(jid,lids,meid,melid)))
+			const sessions = await authState.keys.get('session', addrs)
+			for (const jid of jids) {
+				const signalId = signalRepository.jidToSignalProtocolAddress(convertlidDevice(jid,lids,meid,melid))
+				if (!sessions[signalId]) {
+					jidsRequiringFetch.push(jid)
+				}
+			}
+		}
 
-        const sessions = await authState.keys.get('session', addrs);
-        for (const jid of jids) {
-            const signalId = signalRepository.jidToSignalProtocolAddress(convertlidDevice(jid, lids, meid, melid));
-            if (!sessions[signalId]) {
-                jidsRequiringFetch.push(jid);
-            }
-        }
-    }
+		if (jidsRequiringFetch.length) {
+			logger.debug({ jidsRequiringFetch }, 'fetching sessions')
+			const result = await query({
+				tag: 'iq',
+				attrs: {
+					xmlns: 'encrypt',
+					type: 'get',
+					to: S_WHATSAPP_NET
+				},
+				content: [
+					{
+						tag: 'key',
+						attrs: {},
+						content: jidsRequiringFetch.map(jid => ({
+							tag: 'user',
+							attrs: { jid }
+						}))
+					}
+				]
+			})
+			await parseAndInjectE2ESessions(result, signalRepository, lids, meid, melid)
 
-    if (jidsRequiringFetch.length) {
-        logger.debug({ jidsRequiringFetch }, 'fetching sessions');
-        const result = await query({
-            tag: 'iq',
-            attrs: {
-                xmlns: 'encrypt',
-                type: 'get',
-                to: S_WHATSAPP_NET,
-            },
-            content: [
-                {
-                    tag: 'key',
-                    attrs: { },
-                    content: jidsRequiringFetch.map(
-                        jid => ({
-                            tag: 'user',
-                            attrs: { jid },
-                        })
-                    )
-                }
-            ]
-        });
-        await parseAndInjectE2ESessions(result, signalRepository);
+			didFetchNewSession = true
+		}
 
-        didFetchNewSession = true;
-    }
-
-    return didFetchNewSession;
-};
+		return didFetchNewSession
+	}
 
 	const sendPeerDataOperationMessage = async(
 		pdoMessage: proto.Message.IPeerDataOperationRequestMessage

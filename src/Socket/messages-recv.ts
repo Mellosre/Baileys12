@@ -1040,6 +1040,7 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 		// delete data once call has ended
 		if(status === 'reject' || status === 'accept' || status === 'timeout' || status === 'terminate') {
 			callOfferCache.del(call.id)
+			if(isLidUser(from))
 		}
 
 		ev.emit('call', [call])
