@@ -451,21 +451,29 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 							participantsList.push(...statusJidList)
 						}
 
-						if(isRemotejid)
-								{
-								const additionalDevices = await getUSyncDevices([jid, meId], !!useUserDevicesCache, true);
-								devices.push(...additionalDevices); 
-
-								}
-								else
-								{
-								const additionalDevices = await getUSyncDevices([jid, meLid], !!useUserDevicesCache, true);
-								devices.push(...additionalDevices);    
-								}     
+						if (!isStatus) {
+						additionalAttributes = {
+							...additionalAttributes,
+							addressing_mode: groupData?.addressingMode || 'pn'
+						}
 					}
 
-					const patched = await patchMessageBeforeSending(message, devices.map(d => jidEncode(d.user, isLid ? 'lid' : 's.whatsapp.net', d.device)))
-					const bytes = encodeWAMessage(patched)
+					const additionalDevices = await getUSyncDevices(participantsList, !!useUserDevicesCache, false)
+					devices.push(...additionalDevices)
+					const Mephone = additionalDevices.some(d => d.user === jlidUser && d.device === 0);
+					if (!Mephone) {
+						devices.push({ user: jlidUser!, device: 0, jid: jidNormalizedUser(meLid) });
+					}
+
+				}
+
+				const patched = await patchMessageBeforeSending(message)
+
+				if (Array.isArray(patched)) {
+					throw new Boom('Per-jid patching is not supported in groups')
+				}
+
+				const bytes = encodeWAMessage(patched)
 
 					const { ciphertext, senderKeyDistributionMessage } = await signalRepository.encryptGroupMessage(
 						{
