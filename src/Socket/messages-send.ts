@@ -199,52 +199,56 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		return deviceResults
 	}
 
-	const assertSessions = async (jids: string[], force: boolean, lids?: string) => {
-		let didFetchNewSession = false
-		const melid = jidNormalizedUser(authState.creds.me?.lid)
-		const meid = jidNormalizedUser(authState.creds.me?.id)
-		let jidsRequiringFetch: string[] = []
-		if (force) {
-			jidsRequiringFetch = jids
-		} else {
+	const assertSessions = async(jids: string[], force: boolean) => {
+    let didFetchNewSession = false;
+    let jidsRequiringFetch: string[] = [];
 
-			const addrs = jids.map(jid => signalRepository.jidToSignalProtocolAddress(convertlidDevice(jid,lids,meid,melid)))
-			const sessions = await authState.keys.get('session', addrs)
-			for (const jid of jids) {
-				const signalId = signalRepository.jidToSignalProtocolAddress(convertlidDevice(jid,lids,meid,melid))
-				if (!sessions[signalId]) {
-					jidsRequiringFetch.push(jid)
-				}
-			}
-		}
+    if (force) {
+        jidsRequiringFetch = jids;
+    } else {
+        // Correção: Removido o parêntese extra e a quebra de linha desnecessária
+        const addrs = jids.map(jid =>
+            signalRepository.jidToSignalProtocolAddress(convertlidDevice(jid, lids, meid, melid))
+        );
 
-		if (jidsRequiringFetch.length) {
-			logger.debug({ jidsRequiringFetch }, 'fetching sessions')
-			const result = await query({
-				tag: 'iq',
-				attrs: {
-					xmlns: 'encrypt',
-					type: 'get',
-					to: S_WHATSAPP_NET
-				},
-				content: [
-					{
-						tag: 'key',
-						attrs: {},
-						content: jidsRequiringFetch.map(jid => ({
-							tag: 'user',
-							attrs: { jid }
-						}))
-					}
-				]
-			})
-			await parseAndInjectE2ESessions(result, signalRepository, lids, meid, melid)
+        const sessions = await authState.keys.get('session', addrs);
+        for (const jid of jids) {
+            const signalId = signalRepository.jidToSignalProtocolAddress(convertlidDevice(jid, lids, meid, melid));
+            if (!sessions[signalId]) {
+                jidsRequiringFetch.push(jid);
+            }
+        }
+    }
 
-			didFetchNewSession = true
-		}
+    if (jidsRequiringFetch.length) {
+        logger.debug({ jidsRequiringFetch }, 'fetching sessions');
+        const result = await query({
+            tag: 'iq',
+            attrs: {
+                xmlns: 'encrypt',
+                type: 'get',
+                to: S_WHATSAPP_NET,
+            },
+            content: [
+                {
+                    tag: 'key',
+                    attrs: { },
+                    content: jidsRequiringFetch.map(
+                        jid => ({
+                            tag: 'user',
+                            attrs: { jid },
+                        })
+                    )
+                }
+            ]
+        });
+        await parseAndInjectE2ESessions(result, signalRepository);
 
-		return didFetchNewSession
-	}
+        didFetchNewSession = true;
+    }
+
+    return didFetchNewSession;
+};
 
 	const sendPeerDataOperationMessage = async(
 		pdoMessage: proto.Message.IPeerDataOperationRequestMessage
