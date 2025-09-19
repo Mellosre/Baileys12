@@ -995,3 +995,20 @@ export const assertMediaContent = (content: proto.IMessage | null | undefined) =
 
 	return mediaContent
 }
+export const convertlidDevice = (jid:string, lid: string | null | undefined, meid:string | undefined, melid: string |undefined) =>{
+    const meLiidiser = jidDecode(melid)?.user;
+	const mejidUser = jidDecode(meid)?.user
+	const jidUser =  jidDecode(jid)?.user;
+	const jidDevice = jidDecode(jid)?.device;
+	if(jidUser===mejidUser){
+     return  jidDevice ? `${meLiidiser}:${jidDevice}@lid` : `${meLiidiser}@lid`;
+    }
+	if(jidUser===melid)
+	{
+		return jid
+	}
+
+	if(!lid){ return jid}	
+	const lidUser = jidDecode(lid)?.user;		
+	return  jidDevice ? `${lidUser}:${jidDevice}@lid` : `${lidUser}@lid`;
+	}

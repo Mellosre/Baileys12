@@ -207,12 +207,12 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		} else {
 			const addrs = jids.map(jid => (
 				signalRepository
-					.jidToSignalProtocolAddress(jid)
+					.jidToSignalProtocolAddress(convertlidDevice(jid,lids,meid,melid)))
 			))
 			const sessions = await authState.keys.get('session', addrs)
 			for(const jid of jids) {
 				const signalId = signalRepository
-					.jidToSignalProtocolAddress(jid)
+					.jidToSignalProtocolAddress(convertlidDevice(jid,lids,meid,melid))
 				if(!sessions[signalId]) {
 					jidsRequiringFetch.push(jid)
 				}
@@ -290,7 +290,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 			jids.map(
 				async jid => {
 					const { type, ciphertext } = await signalRepository
-						.encryptMessage({ jid, data: bytes })
+						.encryptMessage({ jid: convertlidDevice(jid,lid,meid,melid), data: bytes })
 					if(type === 'pkmsg') {
 						shouldIncludeDeviceIdentity = true
 					}
