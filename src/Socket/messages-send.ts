@@ -199,49 +199,46 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		return deviceResults
 	}
 
-	const assertSessions = async(jids: string[], force: boolean) => {
+	const assertSessions = async (jids: string[], force: boolean, lids?: string) => {
 		let didFetchNewSession = false
+		const melid = jidNormalizedUser(authState.creds.me?.lid)
+		const meid = jidNormalizedUser(authState.creds.me?.id)
 		let jidsRequiringFetch: string[] = []
-		if(force) {
+		if (force) {
 			jidsRequiringFetch = jids
 		} else {
-			const addrs = jids.map(jid => (
-				signalRepository
-					.jidToSignalProtocolAddress(convertlidDevice(jid,lids,meid,melid)))
-			))
+
+			const addrs = jids.map(jid => signalRepository.jidToSignalProtocolAddress(convertlidDevice(jid,lids,meid,melid)))
 			const sessions = await authState.keys.get('session', addrs)
-			for(const jid of jids) {
-				const signalId = signalRepository
-					.jidToSignalProtocolAddress(convertlidDevice(jid,lids,meid,melid))
-				if(!sessions[signalId]) {
+			for (const jid of jids) {
+				const signalId = signalRepository.jidToSignalProtocolAddress(convertlidDevice(jid,lids,meid,melid))
+				if (!sessions[signalId]) {
 					jidsRequiringFetch.push(jid)
 				}
 			}
 		}
 
-		if(jidsRequiringFetch.length) {
+		if (jidsRequiringFetch.length) {
 			logger.debug({ jidsRequiringFetch }, 'fetching sessions')
 			const result = await query({
 				tag: 'iq',
 				attrs: {
 					xmlns: 'encrypt',
 					type: 'get',
-					to: S_WHATSAPP_NET,
+					to: S_WHATSAPP_NET
 				},
 				content: [
 					{
 						tag: 'key',
-						attrs: { },
-						content: jidsRequiringFetch.map(
-							jid => ({
-								tag: 'user',
-								attrs: { jid },
-							})
-						)
+						attrs: {},
+						content: jidsRequiringFetch.map(jid => ({
+							tag: 'user',
+							attrs: { jid }
+						}))
 					}
 				]
 			})
-			await parseAndInjectE2ESessions(result, signalRepository)
+			await parseAndInjectE2ESessions(result, signalRepository, lids, meid, melid)
 
 			didFetchNewSession = true
 		}
