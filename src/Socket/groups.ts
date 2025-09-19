@@ -168,7 +168,7 @@ export const makeGroupsSocket = (config: SocketConfig) => {
 			const nodeAction = getBinaryNodeChild(node, action)
 			const participantsAffected = getBinaryNodeChildren(nodeAction, 'participant')
 			return participantsAffected.map(p => {
-				return { status: p.attrs.error || '200', jid: p.attrs.jid }
+				return { status: p.attrs.error || '200', jid: p.attrs.jid, lid: p.attrs.lid }
 			})
 		},
 		groupParticipantsUpdate: async(
@@ -193,7 +193,7 @@ export const makeGroupsSocket = (config: SocketConfig) => {
 			const node = getBinaryNodeChild(result, action)
 			const participantsAffected = getBinaryNodeChildren(node, 'participant')
 			return participantsAffected.map(p => {
-				return { status: p.attrs.error || '200', jid: p.attrs.jid, content: p }
+				return { status: p.attrs.error || '200', jid: p.attrs.jid, lid:p.attrs.lid, content: p }
 			})
 		},
 		groupUpdateDescription: async(jid: string, description?: string) => {
@@ -358,7 +358,8 @@ export const extractGroupMetadata = (result: BinaryNode) => {
 				id: attrs.jid,
 				jid: isJidUser(attrs.jid) ? attrs.jid : jidNormalizedUser(attrs.phone_number),
 				lid: isLidUser(attrs.jid) ? attrs.jid : attrs.lid,
-				admin: (attrs.type || null) as GroupParticipant['admin']
+				admin: (attrs.type || null) as GroupParticipant['admin'],
+				lid: attrs.lid
 			}
 		}),
 		ephemeralDuration: eph ? +eph : undefined

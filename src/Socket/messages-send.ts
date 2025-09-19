@@ -420,13 +420,22 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 					])
 
 					if(!participant) {
-						const participantsList = (groupData && !isStatus) ? groupData.participants.map(p => p.id) : []
+						 const participantsList = (groupData && !isStatus) ? groupData.participants.map(p => p.lid || p.id) : [];
 						if(isStatus && statusJidList) {
 							participantsList.push(...statusJidList)
 						}
 
-						const additionalDevices = await getUSyncDevices(participantsList, !!useUserDevicesCache, false)
-						devices.push(...additionalDevices)
+						if(isRemotejid)
+								{
+								const additionalDevices = await getUSyncDevices([jid, meId], !!useUserDevicesCache, true);
+								devices.push(...additionalDevices); 
+
+								}
+								else
+								{
+								const additionalDevices = await getUSyncDevices([jid, meLid], !!useUserDevicesCache, true);
+								devices.push(...additionalDevices);    
+								}     
 					}
 
 					const patched = await patchMessageBeforeSending(message, devices.map(d => jidEncode(d.user, isLid ? 'lid' : 's.whatsapp.net', d.device)))
@@ -443,12 +452,10 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 					const senderKeyJids: string[] = []
 					// ensure a connection is established with every device
 					for(const { user, device } of devices) {
-						const jid = jidEncode(user, isLid ? 'lid' : 's.whatsapp.net', device)
-						if(!senderKeyMap[jid] || !!participant) {
-							senderKeyJids.push(jid)
-							// store that this person has had the sender keys sent to them
-							senderKeyMap[jid] = true
-						}
+						const server = jidDecode(jid)?.server || 'lid' ;
+				     	const senderId = jidEncode(user, server, device)				
+						senderKeyJids.push(senderId)
+						senderKeyMap[senderId] = true
 					}
 
 					// if there are some participants with whom the session has not been established
@@ -479,23 +486,20 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 
 					await authState.keys.set({ 'sender-key-memory': { [jid]: senderKeyMap } })
 				} else {
-					const { user: meUser } = jidDecode(meId)!
+
+					const { user: meUser, device: meDevice } = jidDecode(meId)!
+					const lidattrs = jidDecode(authState.creds.me?.lid);
+					
 
 					if(!participant) {
-						devices.push({ user })
-						if(user !== meUser) {
-							devices.push({ user: meUser })
-						}
+						devices.push({ user, device:0, jid })						
+						   if(meDevice !== undefined && meDevice !== 0) {					
+						   	devices.push({ user: meUser, device:0, jid:  jidNormalizedUser(meId)});						
+							devices.push({ user: jlidUser, device: 0, jid:  jidNormalizedUser(meLid)});
 
-						if(additionalAttributes?.['category'] !== 'peer') {
-							const additionalDevices = await getUSyncDevices([ meId, jid ], !!useUserDevicesCache, true)
-							devices.push(...additionalDevices);
-								if(remoteLid)
-									{
-										const AdittionalLid = await getUSyncDevices([remoteLid], !!useUserDevicesCache, true);
-										devices.push(...AdittionalLid);
-									} 		
-						}
+	                        const additionalDevices = await getUSyncDevices([ jid, meLid, meId], !!useUserDevicesCache, true)
+							devices.push(...additionalDevices);												
+					     }
 					}
 
 					const allJids: string[] = []
