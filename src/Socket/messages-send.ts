@@ -348,22 +348,17 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 	) => {
 		const meId = authState.creds.me!.id
 		const meLid =  authState.creds.me!.lid || authState.creds.me!.id
-
-		const { user, server } = jidDecode(jid)!
-		const statusJid = 'status@broadcast'
-		const isGroup = server === 'g.us'
-		const isStatus = jid === statusJid
-		const isLid = server === 'lid'
-		let remoteLid : string;
+        let isRemotejid : string;
 		if(!participant && isJidUser(jid) )
 				{
 					
+					isRemotejid = jid;
 					if(!isLidUser(jid))
 						{
 
 						const verify = lidCache.get(jid);
 						if(verify){ 
-							remoteLid = verify
+							jid = verify
 						}
 						else
 						{	const usyncQuery = new USyncQuery().withContactProtocol().withLIDProtocol()
@@ -373,13 +368,18 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 							const maybeLid = results.list[0]?.lid;
 								if (typeof maybeLid === 'string') {
 								lidCache.set(jid,maybeLid)
-								remoteLid = maybeLid;
+								jid = maybeLid;
 								
 								}					
 						   }
 						}
 					}
-			}			
+			}		
+		const { user, server } = jidDecode(jid)!
+		const statusJid = 'status@broadcast'
+		const isGroup = server === 'g.us'
+		const isStatus = jid === statusJid
+		const isLid = server === 'lid'			
 
 		let shouldIncludeDeviceIdentity = false
 
@@ -447,7 +447,8 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 					])
 
 					if(!participant) {
-						 const participantsList = (groupData && !isStatus) ? groupData.participants.map(p => p.lid || p.id) : [];
+						 const participantsList = (groupData && !isStatus) ? groupData.participants.map(p => p.lid || p.id)
+				    .filter((id): id is string => typeof id === 'string'): [];
 						if(isStatus && statusJidList) {
 							participantsList.push(...statusJidList)
 						}
@@ -459,7 +460,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 						}
 					}
 
-					const additionalDevices = await getUSyncDevices(participantsList, !!useUserDevicesCache, false);
+					const additionalDevices = await getUSyncDevices(participantsList, !!useUserDevicesCache, false)
 					devices.push(...additionalDevices)
 					const Mephone = additionalDevices.some(d => d.user === jlidUser && d.device === 0);
 					if (!Mephone) {
@@ -480,7 +481,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 						{
 							group: destinationJid,
 							data: bytes,
-							meId: meLid
+							meId:meLid
 						}
 					)
 
@@ -488,10 +489,12 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 					// ensure a connection is established with every device
 					for(const { user, device } of devices) {
 						const server = jidDecode(jid)?.server || 'lid' ;
-				     	const senderId = jidEncode(user, server, device)				
+				     	const senderId = jidEncode(user, server, device)						
+						if (!senderKeyMap[senderId] || !!participant) {				
 						senderKeyJids.push(senderId)
 						senderKeyMap[senderId] = true
 					}
+			 }
 
 					// if there are some participants with whom the session has not been established
 					// if there are, we re-send the senderkey
@@ -524,21 +527,29 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 
 					const { user: meUser, device: meDevice } = jidDecode(meId)!
 					const lidattrs = jidDecode(authState.creds.me?.lid);
-					const jlidUser = lidattrs?.user || meLid				
-					if(!participant) {					
-						     devices.push({ user, device:0, jid })					
-						   if(meDevice !== undefined && meDevice !== 0) {			   					
-								devices.push({ user: jlidUser, device: 0, jid:  jidNormalizedUser(meLid)});	
-								devices.push({ user: meUser, device:0, jid:  jidNormalizedUser(meId)});		
-								const additionalDevices = await getUSyncDevices([jid, meId , meLid], !!useUserDevicesCache, true);
-								devices.push(...additionalDevices);
-								if(remoteLid)
-									{
-										const AdittionalLid = await getUSyncDevices([remoteLid], !!useUserDevicesCache, true);
-										devices.push(...AdittionalLid);
-									}   													
-					     }
+					cconst jlidUser = lidattrs?.user
+				
+					if(!participant) {						
+				
+
+						devices.push({ user, device:0, jid })						
+						if(meDevice !== undefined && meDevice !== 0) {						
+						   
+						   if(isLidUser(jid) && jlidUser)
+						   {							
+							devices.push({ user: jlidUser, device: 0, jid:  jidNormalizedUser(meLid)});
+							const additionalDevices = await getUSyncDevices([ jid, meLid], !!useUserDevicesCache, true)
+							devices.push(...additionalDevices);							
+						   }
+						   else
+						   {
+						   devices.push({ user: meUser, device:0, jid:  jidNormalizedUser(meId)});
+						   const additionalDevices = await getUSyncDevices([ jid, meId], !!useUserDevicesCache, true)
+						   devices.push(...additionalDevices);	
+						   }					
+					    
 					}
+				}
 
 					const allJids: string[] = []
 					const meJids: string[] = []
@@ -608,7 +619,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 						stanza.attrs.to = participant.jid
 					}
 				} else {
-					stanza.attrs.to = destinationJid
+					tanza.attrs.to = isRemotejid || destinationJid
 				}
 
 				if(shouldIncludeDeviceIdentity) {
