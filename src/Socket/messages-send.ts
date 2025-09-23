@@ -349,6 +349,8 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		const meId = authState.creds.me!.id
 		const meLid =  authState.creds.me!.lid || authState.creds.me!.id
         let isRemotejid : string;
+		const lidattrs = jidDecode(authState.creds.me?.lid);
+		const jlidUser = lidattrs?.user
 		if(!participant && isJidUser(jid) )
 				{
 					
@@ -526,9 +528,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 				} else {
 
 					const { user: meUser, device: meDevice } = jidDecode(meLid)!
-					const lidattrs = jidDecode(authState.creds.me?.lid);
-					cconst jlidUser = lidattrs?.user
-				
+									
 					if(!participant) {						
 				
 
