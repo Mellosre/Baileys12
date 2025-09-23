@@ -99,7 +99,7 @@ export function decodeMessageNode(stanza: BinaryNode, meId: string, meLid: strin
 		}
 		}
  else if (isJidGroup(from)) {
-		if (!participant) {
+		if (!participant && !participant_lid) {
 			throw new Boom('No participant in group message')
 		}
 
@@ -134,8 +134,23 @@ export function decodeMessageNode(stanza: BinaryNode, meId: string, meLid: strin
 			msgType = isParticipantMe ? 'peer_broadcast' : 'other_broadcast'
 		}
 
-		chatId = from
-		author = participant_lid || participant	 		
+		chatId = from || sender_lid
+		const deviceOrigem = jidDecode(participant)?.device
+		if (fromMe) {
+			const userDestino = jidDecode(jidNormalizedUser(meLid))?.user;
+			author = deviceOrigem
+			? `${userDestino}:${deviceOrigem}@lid`
+			: `${userDestino}@lid`;
+		} else {
+			if (!participant_lid) {
+			author = participant;
+			} else {
+			const userDestino = jidDecode(participant_lid)?.user;
+			author = deviceOrigem
+				? `${userDestino}:${deviceOrigem}@lid`
+				: `${userDestino}@lid`;
+			}
+		} 		
 	
 	} else if (isJidNewsletter(from)) {
 		msgType = 'newsletter'
