@@ -526,7 +526,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 					await authState.keys.set({ 'sender-key-memory': { [jid]: senderKeyMap } })
 				} else {
 
-					const { user: meUser, device: meDevice } = jidDecode(meLid)!
+					const { user: meUser, device: meDevice } = jidDecode(meId)!
 									
 					if(!participant) {						
 				
