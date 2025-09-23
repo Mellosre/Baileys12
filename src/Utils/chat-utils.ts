@@ -814,8 +814,7 @@ export const processSyncAction = (
 			{
 				id: id,
 				name: action.contactAction.fullName!,
-				lid: action.contactAction.lidJid || undefined,
-				jid: isJidUser(id) ? id : undefined
+				lid: action.contactAction.lidJid || undefined,	
 			}
 		])
 	} else if(action?.pushNameSetting) {
