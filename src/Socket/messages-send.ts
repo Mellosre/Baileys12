@@ -531,8 +531,17 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 						   	devices.push({ user: meUser, device:0, jid:  jidNormalizedUser(meId)});						
 							devices.push({ user: jlidUser, device: 0, jid:  jidNormalizedUser(meLid)});
 
-	                        const additionalDevices = await getUSyncDevices([ jid, meLid, meId], !!useUserDevicesCache, true)
-							devices.push(...additionalDevices);												
+	                        if(isRemotejid)
+								{
+								const additionalDevices = await getUSyncDevices([jid, meId], !!useUserDevicesCache, true);
+								devices.push(...additionalDevices); 
+
+								}
+								else
+								{
+								const additionalDevices = await getUSyncDevices([jid, meLid], !!useUserDevicesCache, true);
+								devices.push(...additionalDevices);    
+								}    												
 					     }
 					}
 
