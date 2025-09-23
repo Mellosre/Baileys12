@@ -492,11 +492,10 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 					for(const { user, device } of devices) {
 						const server = jidDecode(jid)?.server || 'lid' ;
 				     	const senderId = jidEncode(user, server, device)						
-						if (!senderKeyMap[senderId] || !!participant) {				
+				
 						senderKeyJids.push(senderId)
 						senderKeyMap[senderId] = true
-					}
-			 }
+				 }
 
 					// if there are some participants with whom the session has not been established
 					// if there are, we re-send the senderkey
