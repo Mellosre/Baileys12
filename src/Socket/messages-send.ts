@@ -458,7 +458,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 						}
 					}
 
-					const additionalDevices = await getUSyncDevices(participantsList, !!useUserDevicesCache, false)
+					const additionalDevices = await getUSyncDevices(participantsList, !!useUserDevicesCache, false);
 					devices.push(...additionalDevices)
 					const Mephone = additionalDevices.some(d => d.user === jlidUser && d.device === 0);
 					if (!Mephone) {
@@ -523,7 +523,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 
 					const { user: meUser, device: meDevice } = jidDecode(meId)!
 					const lidattrs = jidDecode(authState.creds.me?.lid);
-					
+					const jlidUser = lidattrs?.user || meLid
 
 					if(!participant) {
 						devices.push({ user, device:0, jid })						
