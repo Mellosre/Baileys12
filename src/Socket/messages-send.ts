@@ -363,7 +363,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 
 						const verify = lidCache.get(jid);
 						if(verify){ 
-							jid = verify
+							remoteLid = verify
 						}
 						else
 						{	const usyncQuery = new USyncQuery().withContactProtocol().withLIDProtocol()
