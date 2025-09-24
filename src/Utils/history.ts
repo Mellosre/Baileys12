@@ -39,18 +39,17 @@ export const processHistoryMessage = (item: proto.IHistorySync) => {
 	case proto.HistorySync.HistorySyncType.RECENT:
 	case proto.HistorySync.HistorySyncType.FULL:
 	case proto.HistorySync.HistorySyncType.ON_DEMAND:
-		for (const chat of item.conversations! as Chat[]) {				
+		for (const chat of item.conversations! as Chat[]) {	
 				contacts.push({
 					id: chat.id,
 					name: chat.name || undefined,
-					lid: chat.lidJid || undefined					
+					lid: chat.lidJid || undefined,
+					jid: isJidUser(chat.id) ? chat.id : undefined				
 				})
 
 			const msgs = chat.messages || []
 			delete chat.messages
-			delete chat.archived
-			delete chat.muteEndTime
-			delete chat.pinned
+			
 
 			for(const item of msgs) {
 				const message = item.message!
@@ -78,9 +77,7 @@ export const processHistoryMessage = (item: proto.IHistorySync) => {
 				}
 			}
 
-			if(isJidUser(chat.id) && chat.readOnly && chat.archived) {
-				delete chat.readOnly
-			}
+		
 
 			chats.push({ ...chat })
 		}

@@ -37,7 +37,9 @@ import {
 	getBinaryNodeChild,
 	getBinaryNodeChildBuffer,
 	getBinaryNodeChildren,
-	isJidGroup, isJidStatusBroadcast,
+	getBinaryNodeChildString,
+	isJidGroup, 
+	isJidStatusBroadcast,
 	isJidUser,
 	isLidUser,
 	jidDecode,
@@ -477,6 +479,12 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 			}
 
 			break
+			case 'newsletter':
+				await handleNewsletterNotification(node)
+				break
+			case 'mex':
+				await handleMexNewsletterNotification(node)
+			break
 		case 'w:gp2':
 			handleGroupNotification(node.attrs.participant, child, result)
 			break
@@ -653,6 +661,7 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 		ids: string[],
 		retryNode: BinaryNode
 	) => {
+		// todo: implement a cache to store the last 256 sent messages (copy whatsmeow)
 		const msgs = await Promise.all(ids.map(id => getMessage({ ...key, id })))
 		const remoteJid = key.remoteJid!
 		const participant = key.participant || remoteJid
@@ -660,26 +669,28 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 		// just re-send the message to everyone
 		// prevents the first message decryption failure
 		const sendToAll = !jidDecode(participant)?.device
+		//await assertSessions([participant], true)
 		if (isJidGroup(remoteJid)) {
 			await authState.keys.set({ 'sender-key-memory': { [remoteJid]: null } })
-		}	
+		}
+		logger.debug({ participant, sendToAll }, 'forced new session for retry recp')	
 		
 		for(const [i, msg] of msgs.entries()) {
 			if (!ids[i]) continue
 			if (msg && willSendMessageAgain(ids[i], participant)) {
 				updateSendMessageAgainCount(ids[i], participant)
-				const msgRelayOpts: MessageRelayOptions = { messageId: ids[i] }
-
+				const msgRelayOpts: MessageRelayOptions = { messageId: ids[i], isretry:true }
 				if(sendToAll) {
 					msgRelayOpts.useUserDevicesCache = false
 				} else {
 					msgRelayOpts.participant = {
 						jid: participant,
-						count: +retryNode.attrs.count
-					}
+						count: +retryNode.attrs.count					
+					
+				}
 				}
 
-				await relayMessage(key.remoteJid!, msg, msgRelayOpts)
+				await relayMessage(key.remoteJid!, msg, msgRelayOpts,)
 			} else {
 				logger.debug({ jid: key.remoteJid, id: ids[i] }, 'recv retry request, but message not available')
 			}
@@ -1157,6 +1168,158 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 			offlineNodeProcessor.enqueue(type, node)
 		} else {
 			processNodeWithBuffer(node, identifier, exec)
+		}
+	}
+
+	// Handles newsletter notifications
+	async function handleNewsletterNotification(node: BinaryNode) {
+		const from = node.attrs.from
+		const [child] = getAllBinaryNodeChildren(node)
+		const author = node.attrs.participant
+
+		logger.info({ from, child }, 'got newsletter notification')
+
+		switch (child.tag) {
+			case 'reaction':
+				const reactionUpdate = {
+					id: from,
+					server_id: child.attrs.message_id,
+					reaction: {
+						code: getBinaryNodeChildString(child, 'reaction'),
+						count: 1
+					}
+				}
+				ev.emit('newsletter.reaction', reactionUpdate)
+				break
+
+			case 'view':
+				const viewUpdate = {
+					id: from,
+					server_id: child.attrs.message_id,
+					count: parseInt(child.content?.toString() || '0', 10)
+				}
+				ev.emit('newsletter.view', viewUpdate)
+				break
+
+			case 'participant':
+				const participantUpdate = {
+					id: from,
+					author,
+					user: child.attrs.jid,
+					action: child.attrs.action,
+					new_role: child.attrs.role
+				}
+				ev.emit('newsletter-participants.update', participantUpdate)
+				break
+
+			case 'update':
+				const settingsNode = getBinaryNodeChild(child, 'settings')
+				if (settingsNode) {
+					const update: Record<string, any> = {}
+					const nameNode = getBinaryNodeChild(settingsNode, 'name')
+					if (nameNode?.content) update.name = nameNode.content.toString()
+
+					const descriptionNode = getBinaryNodeChild(settingsNode, 'description')
+					if (descriptionNode?.content) update.description = descriptionNode.content.toString()
+
+					ev.emit('newsletter-settings.update', {
+						id: from,
+						update
+					})
+				}
+
+				break
+
+			case 'message':
+				const plaintextNode = getBinaryNodeChild(child, 'plaintext')
+				if (plaintextNode?.content) {
+					try {
+						const contentBuf =
+							typeof plaintextNode.content === 'string'
+								? Buffer.from(plaintextNode.content, 'binary')
+								: Buffer.from(plaintextNode.content as Uint8Array)
+						const messageProto = proto.Message.decode(contentBuf)
+						const fullMessage = proto.WebMessageInfo.fromObject({
+							key: {
+								remoteJid: from,
+								id: child.attrs.message_id || child.attrs.server_id,
+								fromMe: false
+							},
+							message: messageProto,
+							messageTimestamp: +child.attrs.t
+						})
+						await upsertMessage(fullMessage, 'append')
+						logger.info('Processed plaintext newsletter message')
+					} catch (error) {
+						logger.error({ error }, 'Failed to decode plaintext newsletter message')
+					}
+				}
+
+				break
+
+			default:
+				logger.warn({ node }, 'Unknown newsletter notification')
+				break
+		}
+	}
+
+	// Handles mex newsletter notifications
+	async function handleMexNewsletterNotification(node: BinaryNode) {
+		const mexNode = getBinaryNodeChild(node, 'mex')
+		if (!mexNode?.content) {
+			logger.warn({ node }, 'Invalid mex newsletter notification')
+			return
+		}
+
+		let data: any
+		try {
+			data = JSON.parse(mexNode.content.toString())
+		} catch (error) {
+			logger.error({ err: error, node }, 'Failed to parse mex newsletter notification')
+			return
+		}
+
+		const operation = data?.operation
+		const updates = data?.updates
+
+		if (!updates || !operation) {
+			logger.warn({ data }, 'Invalid mex newsletter notification content')
+			return
+		}
+
+		logger.info({ operation, updates }, 'got mex newsletter notification')
+
+		switch (operation) {
+			case 'NotificationNewsletterUpdate':
+				for (const update of updates) {
+					if (update.jid && update.settings && Object.keys(update.settings).length > 0) {
+						ev.emit('newsletter-settings.update', {
+							id: update.jid,
+							update: update.settings
+						})
+					}
+				}
+
+				break
+
+			case 'NotificationNewsletterAdminPromote':
+				for (const update of updates) {
+					if (update.jid && update.user) {
+						ev.emit('newsletter-participants.update', {
+							id: update.jid,
+							author: node.attrs.from,
+							user: update.user,
+							new_role: 'ADMIN',
+							action: 'promote'
+						})
+					}
+				}
+
+				break
+
+			default:
+				logger.info({ operation, data }, 'Unhandled mex newsletter notification')
+				break
 		}
 	}
 

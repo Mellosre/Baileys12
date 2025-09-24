@@ -338,14 +338,21 @@ export const extractGroupMetadata = (result: BinaryNode) => {
 	const memberAddMode = getBinaryNodeChildString(group, 'member_add_mode') === 'all_member_add'
 	const metadata: GroupMetadata = {
 		id: groupId,
+		addressingMode: group.attrs.addressing_mode as 'pn' | 'lid',
 		subject: group.attrs.subject,
 		subjectOwner: group.attrs.s_o,
+		subjectOwnerJid: group.attrs.s_o_pn,
 		subjectTime: +group.attrs.s_t,
 		size: getBinaryNodeChildren(group, 'participant').length,
 		creation: +group.attrs.creation,
 		owner: group.attrs.creator ? jidNormalizedUser(group.attrs.creator) : undefined,
+		ownerJid: group.attrs.creator_pn ? jidNormalizedUser(group.attrs.creator_pn) : undefined,
+		owner_country_code: group.attrs.creator_country_code,
 		desc,
 		descId,
+		descOwner,
+		descOwnerJid,
+		descTime,
 		linkedParent: getBinaryNodeChild(group, 'linked_parent')?.attrs.jid || undefined,
 		restrict: !!getBinaryNodeChild(group, 'locked'),
 		announce: !!getBinaryNodeChild(group, 'announcement'),
@@ -357,11 +364,13 @@ export const extractGroupMetadata = (result: BinaryNode) => {
 			return {
 				id: attrs.jid,
 				jid: isJidUser(attrs.jid) ? attrs.jid : jidNormalizedUser(attrs.phone_number),
-				admin: (attrs.type || null) as GroupParticipant['admin'],
-				lid: attrs.lid
+				lid: isLidUser(attrs.jid) ? attrs.jid : attrs.lid,
+				admin: (attrs.type || null) as GroupParticipant['admin']
 			}
 		}),
 		ephemeralDuration: eph ? +eph : undefined
 	}
 	return metadata
 }
+
+export type GroupsSocket = ReturnType<typeof makeGroupsSocket>

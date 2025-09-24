@@ -576,7 +576,9 @@ export const chatModificationToAppPatch = (
 	} else if('clear' in mod) {
 		patch = {
 			syncAction: {
-				clearChatAction: {} // add message range later
+				 clearChatAction: {
+					messageRange: getMessageRange(mod.lastMessages)
+				}
 			},
 			index: ['clearChat', jid, '1' /*the option here is 0 when keep starred messages is enabled*/, '0'],
 			type: 'regular_high',
@@ -814,7 +816,8 @@ export const processSyncAction = (
 			{
 				id: id,
 				name: action.contactAction.fullName!,
-				lid: action.contactAction.lidJid || undefined,	
+				lid: action.contactAction.lidJid || undefined,
+				jid: isJidUser(id) ? id : undefined	
 			}
 		])
 	} else if(action?.pushNameSetting) {

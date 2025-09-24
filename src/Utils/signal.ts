@@ -99,7 +99,7 @@ export const xmppPreKey = (pair: KeyPair, id: number): BinaryNode => (
 					const registrationId = getBinaryNodeChildUInt(node, 'registration', 4)
                     const newlid = convertlidDevice(jid, lid, meid, melid)
 					await repository.injectE2ESession({
-						jid,
+						jid: newlid,
 						session: {
 							registrationId: registrationId!,
 							identityKey: generateSignalPubKey(identity),

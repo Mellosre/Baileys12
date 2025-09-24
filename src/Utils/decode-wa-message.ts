@@ -135,7 +135,7 @@ export function decodeMessageNode(stanza: BinaryNode, meId: string, meLid: strin
 		}
 
 		chatId = from
-		author = participant || participant_lid	
+		author = participant_lid || participant	
 	
 	} else if (isJidNewsletter(from)) {
 		msgType = 'newsletter'
